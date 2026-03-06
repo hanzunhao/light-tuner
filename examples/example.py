@@ -1,11 +1,20 @@
-from summary_writer import SummaryWriter
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-writer = SummaryWriter()
+
+# 训练参数
+params = {
+    "epochs": 3,
+    "learning_rate": 1e-3,
+    "batch_size": 64,
+    "optimizer": "SGD",
+    "model_type": "MLP",
+    "hidden_units": [512, 512],
+}
+
 
 # 定义设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,23 +43,13 @@ class NeuralNetwork(nn.Module):
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
 )
-train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
-test_dataset = datasets.MNIST("data", train=False, transform=transform)
+train_dataset = datasets.MNIST("../data", train=True, download=True, transform=transform)
+test_dataset = datasets.MNIST("../data", train=False, transform=transform)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=1000)
 
 # 初始化模型
 model = NeuralNetwork().to(device)
-
-# 训练参数
-params = {
-    "epochs": 1,
-    "learning_rate": 1e-3,
-    "batch_size": 64,
-    "optimizer": "SGD",
-    "model_type": "MLP",
-    "hidden_units": [512, 512],
-}
 
 # 定义优化器和损失函数
 loss_fn = nn.CrossEntropyLoss()
@@ -84,8 +83,6 @@ for epoch in range(params["epochs"]):
         if batch_idx % 100 == 0:
             batch_loss = train_loss / (batch_idx + 1)
             batch_acc = 100.0 * correct / total
-            writer.add_scalar('batch_loss', batch_loss, epoch * len(train_loader) + batch_idx)
-            writer.add_scalar('batch_accuracy', batch_acc, epoch * len(train_loader) + batch_idx)
 
     # 计算epoch指标
     epoch_loss = train_loss / len(train_loader)
@@ -109,17 +106,9 @@ for epoch in range(params["epochs"]):
     val_loss = val_loss / len(test_loader)
     val_acc = 100.0 * val_correct / val_total
 
-    # 记录epoch指标
-    writer.add_scalar('train_loss', epoch_loss, epoch)
-    writer.add_scalar('train_accuracy', epoch_acc, epoch)
-    writer.add_scalar('val_loss', val_loss, epoch)
-    writer.add_scalar('val_accuracy', val_acc, epoch)
-
     # 打印训练进度
     print(
         f"Epoch {epoch + 1}/{params['epochs']}, "
         f"训练损失: {epoch_loss:.4f}, 训练准确率: {epoch_acc:.2f}%, "
         f"验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.2f}%"
     )
-
-writer.close()
