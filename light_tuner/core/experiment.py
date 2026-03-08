@@ -3,7 +3,7 @@
 定义Experiment类，用于管理一次完整的模型超参数优化实验，
 支持网格搜索/随机搜索两种模式，实现多进程并发测试控制。
 """
-from typing import Dict, Literal, List
+from typing import Dict, Literal, List, Optional
 import multiprocessing
 
 # 本地模块导入
@@ -43,9 +43,9 @@ class Experiment:
             name: str,
             hparams_space: Dict,
             search_mode: Literal["grid", "random"],
-            random_search_sample_num: int,
             user_code_path: str,
-            user_params_dict_name: str
+            user_params_dict_name: str,
+            random_search_sample_num: Optional[int] = None
     ) -> None:
         """
         初始化实验实例
@@ -76,6 +76,23 @@ class Experiment:
         # 预生成超参数配置和测试实例
         self.hparams_configs = self._generate_hyperparameter_configs()
         self.test_instances = self._create_test_instances()
+
+        # 校验搜索模式合法性
+        if self.search_mode not in ["grid", "random"]:
+            raise ValueError(
+                f"不支持的搜索模式: {search_mode}，仅支持 'grid' 或 'random'"
+            )
+
+        # 校验随机搜索样本数（仅random模式需要）
+        if self.search_mode == "random":
+            if (
+                    self.random_search_sample_num is None
+                    or not isinstance(self.random_search_sample_num, int)
+                    or self.random_search_sample_num <= 0
+            ):
+                raise ValueError(
+                    f"随机搜索模式下，random_search_sample_num 必须是正整数，当前值: {random_search_sample_num}"
+                )
 
     def _generate_hyperparameter_configs(self) -> List[Dict]:
         """
