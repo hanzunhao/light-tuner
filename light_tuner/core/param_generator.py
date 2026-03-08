@@ -1,83 +1,101 @@
+"""
+超参数生成器模块
+提供网格搜索和随机搜索两种超参数组合生成方式
+"""
 import random
-from typing import Dict
-from light_tuner.utils.exceptions import ParamGenerateError
+from typing import Dict, List, Any
 
 
-# 网格搜索
-def generate_grid(hparams_space: Dict):
-    keys = list(hparams_space.keys())
-    values = list(hparams_space.values())
-    combinations = [[]]
+def generate_grid_search_params(hparams_space: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
+    """
+    网格搜索 - 生成超参数空间的所有可能组合
 
-    # 遍历所有组合
-    for value in values:
-        temp = []
-        for combination in combinations:
-            for item in value:
-                temp.append(combination + [item])
-        combinations = temp
+    遍历超参数空间中每个参数的所有候选值，生成笛卡尔积组合，
+    适用于小范围超参数空间的穷尽搜索
 
-    return [dict(zip(keys, combination)) for combination in combinations]
+    Args:
+        hparams_space: 超参数空间字典
+                       key: 超参数名称（字符串）
+                       value: 该超参数的所有候选值列表
+
+    Returns:
+        List[Dict[str, Any]]: 所有超参数组合的列表，每个元素是一个超参数字典
+    """
+    # 提取超参数名称列表和对应的候选值列表
+    param_names = list(hparams_space.keys())
+    param_values = list(hparams_space.values())
+
+    # 初始化组合列表，起始为包含空列表的列表
+    param_combinations = [[]]
+
+    # 遍历每个参数的候选值，生成笛卡尔积
+    for values in param_values:
+        temp_combinations = []
+        for combination in param_combinations:
+            for value in values:
+                temp_combinations.append(combination + [value])
+        param_combinations = temp_combinations
+
+    # 将组合列表转换为超参数字典列表并返回
+    return [dict(zip(param_names, combination)) for combination in param_combinations]
 
 
-# 随机搜索
-def generate_random(hparams_space: Dict, n: int):
-    combinations = []
+def generate_random_search_params(
+        hparams_space: Dict[str, List[Any] | tuple[float, float, float]],
+        num_samples: int
+) -> List[Dict[str, Any]]:
+    """
+    随机搜索 - 从超参数空间中随机生成指定数量的超参数组合
 
-    for _ in range(n):
+    支持两种类型的超参数：
+    1. 离散型：以列表形式传入，随机选择其中一个值
+    2. 连续型：以(min, max, step)元组形式传入，先生成步长间隔的候选值，再随机选择
 
-        combination = {}
+    Args:
+        hparams_space: 超参数空间字典
+                       key: 超参数名称（字符串）
+                       value: 离散型（列表）或连续型（三元组）超参数候选值
+        num_samples: 需要生成的随机超参数组合数量
 
-        for key, value in hparams_space.items():
-            # 若为离散型超参(list表示)，则随机选择一个侯选值
-            if isinstance(value, list):
-                combination[key] = random.choice(value)
-            # 若为连续型超参(tuple表示)，则按(min, max, step)随机生成数值
-            elif isinstance(value, tuple) and len(value) == 3:
-                # 生成step步长的所有候选值
-                min, max, step = value[0], value[1], value[2]
+    Returns:
+        List[Dict[str, Any]]: 随机生成的超参数组合列表
+    """
+    random_combinations = []
+
+    # 生成指定数量的随机超参数组合
+    for _ in range(num_samples):
+        single_combination = {}
+
+        # 遍历每个超参数，生成对应的值
+        for param_name, param_config in hparams_space.items():
+            # 处理离散型超参数
+            if isinstance(param_config, list):
+                single_combination[param_name] = random.choice(param_config)
+
+            # 处理连续型超参数（min, max, step）
+            elif isinstance(param_config, tuple) and len(param_config) == 3:
+                min_val, max_val, step_val = param_config
                 candidates = []
-                current = min
-                while current <= max + 1e-8:  # 浮点精度容错
-                    candidates.append(round(current, 6))  # 保留6位小数避免精度问题
-                    current += step
+                current_val = min_val
+
+                # 生成步长间隔的候选值（处理浮点精度问题）
+                while current_val <= max_val + 1e-8:
+                    # 保留6位小数避免浮点精度问题
+                    candidates.append(round(current_val, 6))
+                    current_val += step_val
+
+                # 检查候选值是否为空
                 if not candidates:
-                    raise ParamGenerateError(f"连续参数{key}无有效取值：min={min}, max={max}, step={step}")
-                # 随机选择一个侯选值
-                combination[key] = random.choice(candidates)
+                    print(f"警告：连续参数{param_name}无有效取值 - min={min_val}, max={max_val}, step={step_val}")
+                    continue
+
+                # 从候选值中随机选择
+                single_combination[param_name] = random.choice(candidates)
+
+            # 不支持的参数类型
             else:
-                raise ParamGenerateError(f"不支持的参数类型：{key}={value}")
+                print(f"错误：不支持的参数类型 - {param_name}={param_config}")
 
-        combinations.append(combination)
+        random_combinations.append(single_combination)
 
-    return combinations
-
-
-# 测试用例
-if __name__ == '__main__':
-    hparams_space = {
-        # 离散整型：卷积层1的滤波器数量
-        "conv1_filters": [16, 32],
-        # 离散整型：卷积层2的滤波器数量
-        "conv2_filters": [32, 64],
-        # 离散整型：全连接层神经元数量
-        "dense_units": [128, 256],
-        # 连续浮点型：学习率
-        "learning_rate": (0.005, 0.05, 0.005),
-        # 连续浮点型：Dropout
-        "dropout_rate": (0.1, 0.3, 0.05),
-        # 离散分类型：优化器
-        "optimizer": ["adam", "sgd"]
-    }
-
-    n = 6
-
-    print("generate grid result:")
-    combinations = generate_grid(hparams_space)
-    for combination in combinations:
-        print(combination)
-
-    print("generate random result:")
-    combinations = generate_random(hparams_space, n)
-    for combination in combinations:
-        print(combination)
+    return random_combinations

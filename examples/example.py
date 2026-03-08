@@ -4,7 +4,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-
 # 训练参数
 params = {
     "epochs": 3,
@@ -14,7 +13,6 @@ params = {
     "model_type": "MLP",
     "hidden_units": [512, 512],
 }
-
 
 # 定义设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,8 +41,10 @@ class NeuralNetwork(nn.Module):
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
 )
-train_dataset = datasets.MNIST("../data", train=True, download=True, transform=transform)
-test_dataset = datasets.MNIST("../data", train=False, transform=transform)
+# todo:转为使用相对路径
+train_dataset = datasets.MNIST("D:\\Program Files\\Code\\Python\\light-tuner\\data", train=True, download=True,
+                               transform=transform)
+test_dataset = datasets.MNIST("D:\\Program Files\\Code\\Python\\light-tuner\\data", train=False, transform=transform)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=1000)
 
