@@ -5,6 +5,7 @@
 import os
 import tempfile
 from typing import Optional, Union
+from light_tuner.utils.logger import logger
 
 
 def create_temp_py_file(content: str) -> Optional[str]:
@@ -26,9 +27,18 @@ def create_temp_py_file(content: str) -> Optional[str]:
     """
     # 空内容校验
     if not content:
+        logger.warning("创建临时文件失败：内容为空")
         return None
 
     try:
+        # 在用户代码顶部注入
+        freeze_support_code = """import multiprocessing
+multiprocessing.freeze_support()
+"""
+
+        # 合并注入代码和用户代码
+        final_content = freeze_support_code + content
+
         # 创建不自动删除的临时Python文件
         with tempfile.NamedTemporaryFile(
                 mode='w',
@@ -36,12 +46,11 @@ def create_temp_py_file(content: str) -> Optional[str]:
                 delete=False,
                 encoding='utf-8'
         ) as temp_file:
-            temp_file.write(content)
+            temp_file.write(final_content)
             temp_file_path = temp_file.name
-
-        return temp_file_path
+        return os.path.abspath(temp_file_path)
     except IOError as e:
-        print(f"创建临时Python文件失败: {str(e)}")
+        logger.error(f"创建临时文件失败：{str(e)}", exc_info=True)
         return None
 
 
@@ -65,16 +74,20 @@ def read_file(file_path: str) -> Optional[str]:
     """
     # 空路径校验
     if not file_path:
+        logger.warning("读取文件失败：路径为空")
         return None
+
+    # 标准化路径
+    normalized_path = os.path.abspath(file_path)
 
     # 检查文件是否存在
     if not os.path.exists(file_path):
-        print(f"读取文件失败: 文件不存在 - {file_path}")
+        logger.warning(f"读取文件失败：文件不存在 - {normalized_path}")
         return None
 
     # 检查路径是否为文件
     if not os.path.isfile(file_path):
-        print(f"读取文件失败: 路径不是文件 - {file_path}")
+        logger.warning(f"读取文件失败：路径不是文件 - {normalized_path}")
         return None
 
     try:
@@ -82,13 +95,16 @@ def read_file(file_path: str) -> Optional[str]:
             file_content = file_handler.read()
         return file_content
     except PermissionError:
-        print(f"读取文件失败: 没有读取权限 - {file_path}")
+        logger.error(f"读取文件失败：无读取权限 - {normalized_path}")
         return None
     except UnicodeDecodeError:
-        print(f"读取文件失败: 文件不是UTF-8编码 - {file_path}")
+        logger.error(f"读取文件失败：非UTF-8编码 - {file_path}", exc_info=True)
         return None
     except IOError as e:
-        print(f"读取文件失败: 输入输出错误 - {file_path}, 错误信息: {str(e)}")
+        logger.error(f"读取文件失败：IO错误 - {file_path} | {str(e)}", exc_info=True)
+        return None
+    except Exception as e:  # 捕获其他未预期异常
+        logger.error(f"读取文件失败：未知错误 - {normalized_path} | {str(e)}", exc_info=True)
         return None
 
 
@@ -108,18 +124,22 @@ def delete_file(file_path: Union[str, None]) -> None:
     if not file_path:
         return
 
+    # 标准化路径
+    normalized_path = os.path.abspath(file_path)
+
     # 检查文件是否存在
-    if not os.path.exists(file_path):
+    if not os.path.exists(normalized_path):
         return
 
     # 检查路径是否为文件（避免误删目录）
-    if not os.path.isfile(file_path):
-        print(f"删除失败: 路径不是文件 - {file_path}")
+    if not os.path.isfile(normalized_path):
         return
 
     try:
         os.remove(file_path)
     except PermissionError:
-        print(f"删除文件失败: 没有删除权限 - {file_path}")
+        logger.error(f"删除文件失败：无删除权限 - {normalized_path}")
     except IOError as e:
-        print(f"删除文件失败: 输入输出错误 - {file_path}, 错误信息: {str(e)}")
+        logger.error(f"删除文件失败：IO错误 - {normalized_path} | {str(e)}", exc_info=True)
+    except Exception as e:  # 捕获其他未预期异常
+        logger.error(f"删除文件失败：未知错误 - {normalized_path} | {str(e)}", exc_info=True)
