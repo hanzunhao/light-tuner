@@ -4,6 +4,7 @@
 """
 import random
 from typing import Dict, List, Any
+from light_tuner.utils.logger import logger
 
 
 def generate_grid_search_params(hparams_space: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
@@ -86,7 +87,7 @@ def generate_random_search_params(
 
                 # 检查候选值是否为空
                 if not candidates:
-                    print(f"警告：连续参数{param_name}无有效取值 - min={min_val}, max={max_val}, step={step_val}")
+                    logger.warning(f"连续参数{param_name}无有效取值 - min={min_val}, max={max_val}, step={step_val}")
                     continue
 
                 # 从候选值中随机选择
@@ -94,7 +95,8 @@ def generate_random_search_params(
 
             # 不支持的参数类型
             else:
-                print(f"错误：不支持的参数类型 - {param_name}={param_config}")
+                logger.error(f"不支持的参数类型 - {param_name}={param_config}（类型: {type(param_config)}）")
+                raise
 
         random_combinations.append(single_combination)
 

@@ -4,6 +4,7 @@
 """
 import re
 from typing import Dict, Any
+from light_tuner.utils.logger import logger
 
 
 def convert_dict_to_python_str(parameters: Dict[Any, Any]) -> str:
@@ -24,9 +25,10 @@ def convert_dict_to_python_str(parameters: Dict[Any, Any]) -> str:
     """
     # 输入类型校验
     if not isinstance(parameters, dict):
-        raise TypeError(f"输入必须是字典类型，当前类型: {type(parameters)}")
+        error_msg = f"字典转换失败：输入必须是字典类型，当前类型: {type(parameters)}"
+        logger.error(error_msg)
+        raise TypeError(error_msg)
 
-    # 使用repr确保输出合法的Python语法格式
     return repr(parameters)
 
 
@@ -48,12 +50,21 @@ def replace_parameter_dict_in_code(
 
     Returns:
         str: 替换后的代码字符串
-
-    Examples:
-        >>> code = "params = {'lr': 0.01, 'bs': 32}"
-        >>> replace_parameter_dict_in_code(code, "params", {"lr": 0.001, "bs": 64})
-        "params = {'lr': 0.001, 'bs': 64}"
     """
+
+    # 前置校验：核心参数不能为空
+    if not code_content:
+        logger.error("代码参数注入失败：原始代码内容为空")
+        raise ValueError("code_content 不能为空字符串")
+
+    if not target_dict_name:
+        logger.error("代码参数注入失败：目标字典变量名不能为空")
+        raise ValueError("target_dict_name 不能为空字符串")
+
+    if not isinstance(new_parameter_dict, dict):
+        logger.error(f"代码参数注入失败：新参数字典必须是字典类型，当前类型: {type(new_parameter_dict)}")
+        raise TypeError(f"代码参数注入失败：新参数字典必须是字典类型，当前类型: {type(new_parameter_dict)}")
+
     # 生成新的字典赋值代码
     new_dict_code = f"{target_dict_name} = {convert_dict_to_python_str(new_parameter_dict)}"
 
@@ -63,14 +74,13 @@ def replace_parameter_dict_in_code(
         r"\{\s*"
         r'(?:".+?":\s*.+?,?\s*)*'
         r"\}",
-        re.VERBOSE | re.DOTALL  # VERBOSE允许注释正则，DOTALL让.匹配换行
+        re.VERBOSE | re.DOTALL | re.MULTILINE  # 多行、点匹配换行、允许正则注释
     )
 
     # 执行替换（如果未匹配到则返回原代码）
     modified_code = pattern.sub(new_dict_code, code_content)
 
-    # 可选：添加未匹配到的提示（便于调试）
     if modified_code == code_content:
-        print(f"警告：未在代码中找到可替换的字典变量 '{target_dict_name}'")
+        logger.warning(f"未在代码中找到可替换的字典变量 '{target_dict_name}'")
 
     return modified_code

@@ -102,8 +102,8 @@ for epoch in range(params["epochs"]):
     val_acc = 100.0 * val_correct / val_total
 
     # 打印训练进度
-    # print(
-    #     f"Epoch {epoch + 1}/{params['epochs']}, "
-    #     f"训练损失: {epoch_loss:.4f}, 训练准确率: {epoch_acc:.2f}%, "
-    #     f"验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.2f}%"
-    # )
+    print(
+        f"Epoch {epoch + 1}/{params['epochs']}, "
+        f"训练损失: {epoch_loss:.4f}, 训练准确率: {epoch_acc:.2f}%, "
+        f"验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.2f}%"
+    )
