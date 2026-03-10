@@ -2,8 +2,6 @@ from datetime import datetime
 from typing import Dict
 
 
-# todo:补充向后端传入指标的函数
-
 # 记录一轮训练中的多个指标并打印在控制台上
 def log_metrics(
         metrics: Dict,
