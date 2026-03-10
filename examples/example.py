@@ -41,7 +41,6 @@ class NeuralNetwork(nn.Module):
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
 )
-# todo:转为使用相对路径
 train_dataset = datasets.MNIST("D:\\Program Files\\Code\\Python\\light-tuner\\data", train=True, download=True,
                                transform=transform)
 test_dataset = datasets.MNIST("D:\\Program Files\\Code\\Python\\light-tuner\\data", train=False, transform=transform)

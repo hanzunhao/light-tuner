@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from light_tuner import log_metrics
 
 params = {
     "epochs": 3,
@@ -101,9 +102,19 @@ for epoch in range(params["epochs"]):
     val_loss = val_loss / len(test_loader)
     val_acc = 100.0 * val_correct / val_total
 
-    # 打印训练进度
-    print(
-        f"Epoch {epoch + 1}/{params['epochs']}, "
-        f"训练损失: {epoch_loss:.4f}, 训练准确率: {epoch_acc:.2f}%, "
-        f"验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.2f}%"
+    log_metrics(
+        {
+            "train_loss": epoch_loss,
+            "train_acc": epoch_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc
+        },
+        epoch,
+        False
     )
+
+
+
+
+
+

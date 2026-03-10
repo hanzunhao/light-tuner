@@ -7,6 +7,8 @@ from typing import Dict, List, Any
 from light_tuner.utils.logger import logger
 
 
+# todo: 增加判断,若随即搜索时传入的采样数甚至大于网格搜索结果数，采样数赋值为网格搜索结果数
+
 def generate_grid_search_params(hparams_space: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
     """
     网格搜索 - 生成超参数空间的所有可能组合

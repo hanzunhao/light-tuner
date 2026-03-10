@@ -72,16 +72,15 @@ class Experiment:
         self.user_params_dict_name = user_params_dict_name
 
         # 精简初始化日志，优化格式
-        logger.info(f"\n{'='*60}")
         logger.info(f"[实验 {self.name}] 初始化配置")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
         logger.info(f"搜索模式      : {self.search_mode.upper()}")
         logger.info(f"超参数空间    : {self.hparams_space}")
         if self.search_mode == "random":
             logger.info(f"随机采样数    : {self.random_search_sample_num}")
         logger.info(f"训练代码路径  : {self.user_code_path}")
         logger.info(f"目标参数字典  : {self.user_params_dict_name}")
-        logger.info(f"{'='*60}\n")
+        logger.info(f"{'=' * 60}\n")
 
         # 运行进程列表
         self.running_processes: List[multiprocessing.Process] = []
@@ -193,12 +192,11 @@ class Experiment:
         2. 定期检查运行中的进程状态，回收已完成的进程资源
         3. 所有进程启动后，等待剩余进程全部完成
         """
-        logger.info(f"\n{'='*60}")
         logger.info(f"[实验 {self.name}] 开始执行所有测试")
-        logger.info(f"{'='*60}")
+        logger.info(f"{'=' * 60}")
         logger.info(f"总测试数      : {len(self.test_instances)}")
         logger.info(f"最大并发数    : {MAX_WORKERS}")
-        logger.info(f"{'='*60}\n")
+        logger.info(f"{'=' * 60}\n")
 
         # 遍历所有测试实例，控制并发启动
         for idx, test_instance in enumerate(self.test_instances, 1):
@@ -219,7 +217,8 @@ class Experiment:
                 self.running_processes.append(test_instance)
                 logger.info(f"[实验 {self.name}] 启动测试 {idx}/{len(self.test_instances)} | ID={test_instance.id}")
             except Exception as e:
-                logger.error(f"[实验 {self.name}] 启动测试{idx}失败 | ID={test_instance.id} | 错误: {str(e)}", exc_info=True)
+                logger.error(f"[实验 {self.name}] 启动测试{idx}失败 | ID={test_instance.id} | 错误: {str(e)}",
+                             exc_info=True)
 
         # 等待所有剩余的进程执行完成并回收资源
         logger.info(f"\n[实验 {self.name}] 所有测试已启动，等待 {len(self.running_processes)} 个进程完成...")
@@ -232,6 +231,4 @@ class Experiment:
         # 清空运行列表
         self.running_processes.clear()
 
-        logger.info(f"\n{'='*60}")
         logger.info(f"[实验 {self.name}] 所有测试执行完成 ✅")
-        logger.info(f"{'='*60}\n")

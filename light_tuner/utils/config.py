@@ -5,7 +5,9 @@
 import logging
 
 MAX_WORKERS = 2
+
 BACKEND_URL = "http://localhost:8080/api"
+
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s | %(process)d | %(module)s | %(levelname)s | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -16,3 +18,6 @@ COLOR_CODES = {
     logging.ERROR: "\033[0;31m",  # 红色 (ERROR)
     logging.CRITICAL: "\033[1;31m"  # 亮红色 (CRITICAL)
 }
+
+AUTOLOG_ENABLED = False
+
