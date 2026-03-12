@@ -173,13 +173,13 @@ class Experiment:
         test_instances = []
         for config_id, hparams_config in enumerate(self.hparams_configs):
             test_instance = Test(
-                id=config_id + 1,  # 测试实例ID（从1开始）
+                id=config_id + 1,
                 hparams=hparams_config,
                 user_params_dict_name=self.user_params_dict_name,
                 user_code=user_code_content
             )
             test_instances.append(test_instance)
-            logger.debug(f"[实验 {self.name}] 创建测试实例ID={config_id + 1} | 超参数={hparams_config}")
+            logger.debug(f"[实验 {self.name}] 创建测试实例ID={config_id + 1} | 超参数配置={hparams_config}")
 
         return test_instances
 
