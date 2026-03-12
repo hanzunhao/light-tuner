@@ -20,4 +20,3 @@ COLOR_CODES = {
 }
 
 AUTOLOG_ENABLED = False
-
