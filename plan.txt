@@ -1,0 +1,15 @@
+# 开发计划
+# todo 项目构成更改：将MySQL改为SQLite，弃用SpringBoot后端，内置静态前端（HTML/CSS/JS+ECharts）
+# todo 数据库表结构设计
+# todo sqlite3学习及封装
+# todo 前端组件布局设计
+# todo 复习HTML/CSS/JS
+# todo README文档编写
+
+# 待优化点
+# todo 单个测试进程失败的重试机制
+# todo 断点续跑
+# todo 超时控制
+
+
+
