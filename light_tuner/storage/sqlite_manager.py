@@ -1,13 +1,22 @@
 import sqlite3
 from pathlib import Path
 import os
-from typing import List
+from typing import List, Optional
 from light_tuner.utils.logger import logger
+from importlib.resources import files as importlib_files
 
 
 class SQLiteManager:
-    def __init__(self, path: str = "database.db"):
-        self.path = Path(path)
+    def __init__(self, path: str = None):
+        # 获取包路径并拼接数据库文件名称
+        try:
+            package_root = importlib_files("light_tuner")
+            self.path = Path(package_root) / "database.db"
+        except ImportError:
+            from pkg_resources import resource_filename
+            package_root = resource_filename("light_tuner", "")
+            self.path = Path(package_root) / "database.db"
+
         self._check_permission()
         self.conn = self._get_connection()
         self.cursor = self.conn.cursor()
@@ -64,7 +73,7 @@ class SQLiteManager:
                 user_code_path VARCHAR(255) NOT NULL,
                 user_params_dict_name VARCHAR(100) NOT NULL,
                 hparams_space TEXT NOT NULL,
-                start_time DATETIME NOT NULL,
+                start_time DATETIME,
                 end_time DATETIME,
                 status TEXT NOT NULL CHECK(status IN ('running', 'finished', 'failed', 'paused')) DEFAULT 'running',
                 CONSTRAINT chk_experiment_status CHECK(status IN ('running', 'finished', 'failed', 'paused')),
@@ -78,7 +87,7 @@ class SQLiteManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 experiment_id INTEGER NOT NULL,
                 hparams TEXT NOT NULL,
-                start_time DATETIME NOT NULL,
+                start_time DATETIME,
                 end_time DATETIME,
                 status TEXT NOT NULL CHECK(status IN ('running', 'finished', 'failed', 'paused')) DEFAULT 'running',
                 FOREIGN KEY (experiment_id) REFERENCES Experiment(id) 
@@ -105,8 +114,6 @@ class SQLiteManager:
 
         # 提交事务
         self.conn.commit()
-
-        logger.info("数据库表结构创建成功")
 
     # 关闭数据库连接
     def close(self) -> None:
@@ -322,7 +329,7 @@ class SQLiteManager:
     """
 
     # 新增测试记录
-    def insert_test(self, experiment_id, hparams, start_time, end_time, status) -> bool:
+    def insert_test(self, experiment_id, hparams, start_time, end_time, status) -> Optional[int]:
         sql = """
             INSERT INTO Test (
                 experiment_id, hparams, start_time, end_time, status
@@ -338,21 +345,21 @@ class SQLiteManager:
                 )
             )
             self.conn.commit()
-            return True
+            return self.cursor.lastrowid
         except self.conn.Error as e:
             self.conn.rollback()
             logger.error(
                 f"插入测试记录（关联实验ID：{experiment_id}）时数据库操作错误：{str(e)}",
                 exc_info=True
             )
-            return False
+            return None
         except Exception as e:
             self.conn.rollback()
             logger.error(
                 f"插入测试记录（关联实验ID：{experiment_id}）时发生未知错误：{str(e)}",
                 exc_info=True
             )
-            return False
+            return None
 
     # 按id删除测试记录
     def delete_test_by_id(self, id) -> bool:
@@ -454,19 +461,19 @@ class SQLiteManager:
     """
 
     # 新增指标记录
-    def insert_metric(self, test_id, metric_name, metric_value, record_time) -> bool:
+    def insert_metric(self, test_id, metric_name, metric_val, epoch, record_time) -> bool:
         sql = """
             INSERT INTO Metric (
-                test_id, metric_name, metric_val, record_time
+                test_id, metric_name, metric_val, epoch, record_time
             ) 
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
         """
 
         try:
             self.cursor.execute(
                 sql,
                 (
-                    test_id, metric_name, metric_value, record_time
+                    test_id, metric_name, metric_val, epoch, record_time
                 )
             )
             self.conn.commit()

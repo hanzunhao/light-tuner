@@ -110,7 +110,7 @@ for epoch in range(params["epochs"]):
             "val_acc": val_acc
         },
         epoch,
-        False
+        True
     )
 
 

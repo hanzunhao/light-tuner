@@ -3,12 +3,14 @@
 定义Experiment类，用于管理一次完整的模型超参数优化实验，
 支持网格搜索/随机搜索两种模式，实现多进程并发测试控制。
 """
+import datetime
 from typing import Dict, Literal, List, Optional
 import multiprocessing
 
 # 本地模块导入
 from .param_generator import generate_grid_search_params, generate_random_search_params
 from .test import Test
+from light_tuner.storage.sqlite_manager import db_manager
 from light_tuner.utils.config import MAX_WORKERS
 from light_tuner.utils.file_operations import read_file
 from light_tuner.utils.logger import logger
@@ -71,24 +73,14 @@ class Experiment:
         self.user_code_path = user_code_path
         self.user_params_dict_name = user_params_dict_name
 
-        # 精简初始化日志，优化格式
-        logger.info(f"[实验 {self.name}] 初始化配置")
-        logger.info(f"{'=' * 60}")
-        logger.info(f"搜索模式      : {self.search_mode.upper()}")
-        logger.info(f"超参数空间    : {self.hparams_space}")
-        if self.search_mode == "random":
-            logger.info(f"随机采样数    : {self.random_search_sample_num}")
-        logger.info(f"训练代码路径  : {self.user_code_path}")
-        logger.info(f"目标参数字典  : {self.user_params_dict_name}")
-        logger.info(f"{'=' * 60}\n")
-
         # 运行进程列表
-        self.running_processes: List[multiprocessing.Process] = []
+        self.running_processes = []
 
         # 校验搜索模式合法性
         if self.search_mode not in ["grid", "random"]:
-            logger.error(f"[实验 {self.name}] 初始化失败：不支持的搜索模式 {search_mode}（仅支持 grid/random）")
-            raise ValueError(f"不支持的搜索模式 {search_mode}（仅支持 grid/random）")
+            error_msg = f"不支持的搜索模式 {search_mode}"
+            logger.error(f"[实验 {self.name}] 初始化失败：{error_msg}")
+            raise ValueError(error_msg)
 
         # 校验随机搜索样本数（仅random模式需要）
         if self.search_mode == "random":
@@ -100,6 +92,20 @@ class Experiment:
                 error_msg = f"随机搜索模式下，random_search_sample_num 必须是正整数（当前值: {random_search_sample_num}）"
                 logger.error(f"[实验 {self.name}] 初始化失败：{error_msg}")
                 raise ValueError(error_msg)
+        else:
+            self.random_search_sample_num = None
+
+        db_manager.insert_experiment(
+            name=self.name,
+            search_mode=self.search_mode,
+            random_search_sample_num=self.random_search_sample_num,
+            user_code_path=self.user_code_path,
+            user_params_dict_name=self.user_params_dict_name,
+            hparams_space=str(self.hparams_space),
+            start_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            end_time=None,
+            status="running"
+        )
 
         # 预生成超参数配置和测试实例
         try:
@@ -115,6 +121,16 @@ class Experiment:
         except Exception as e:
             logger.error(f"[实验 {self.name}] 初始化失败：创建测试实例出错 - {str(e)}", exc_info=True)
             raise
+
+        logger.info(f"[实验 {self.name}] 初始化配置")
+        logger.info(f"{'=' * 60}")
+        logger.info(f"搜索模式      : {self.search_mode}")
+        logger.info(f"超参数空间    : {self.hparams_space}")
+        if self.search_mode == "random":
+            logger.info(f"随机采样数    : {self.random_search_sample_num}")
+        logger.info(f"训练代码路径  : {self.user_code_path}")
+        logger.info(f"目标参数字典  : {self.user_params_dict_name}")
+        logger.info(f"{'=' * 60}\n")
 
         logger.info(f"[实验 {self.name}] 初始化完成 ✅\n")
 
@@ -172,13 +188,25 @@ class Experiment:
         # 为每组超参数配置创建Test实例
         test_instances = []
         for config_id, hparams_config in enumerate(self.hparams_configs):
+            console_test_id = config_id + 1
+            # 插入测试记录
+            db_test_id = db_manager.insert_test(
+                experiment_id=db_manager.select_experiment_by_name(self.name)[0]["id"],
+                hparams=str(hparams_config),
+                start_time=None,
+                end_time=None,
+                status="paused"
+            )
+            # 创建测试实例
             test_instance = Test(
-                id=config_id + 1,
+                id=db_test_id,
+                console_id=console_test_id,
                 hparams=hparams_config,
                 user_params_dict_name=self.user_params_dict_name,
                 user_code=user_code_content
             )
             test_instances.append(test_instance)
+
             logger.debug(f"[实验 {self.name}] 创建测试实例ID={config_id + 1} | 超参数配置={hparams_config}")
 
         return test_instances
@@ -198,37 +226,66 @@ class Experiment:
         logger.info(f"最大并发数    : {MAX_WORKERS}")
         logger.info(f"{'=' * 60}\n")
 
-        # 遍历所有测试实例，控制并发启动
-        for idx, test_instance in enumerate(self.test_instances, 1):
-            # 等待直到运行中的进程数低于上限
-            while len(self.running_processes) >= MAX_WORKERS:
-                # 遍历检查运行中的进程，回收已完成的进程
-                for running_test in list(self.running_processes):
-                    if not running_test.is_alive():
-                        running_test.join()  # 回收进程资源
-                        self.running_processes.remove(running_test)
-                        logger.info(f"[实验 {self.name}] 回收完成进程 | 测试ID={getattr(running_test, 'id', '未知')}")
+        try:
+            # 遍历所有测试实例，控制并发启动
+            for idx, test_instance in enumerate(self.test_instances, 1):
+                # 等待直到运行中的进程数低于上限
+                while len(self.running_processes) >= MAX_WORKERS:
+                    # 遍历检查运行中的进程，回收已完成的进程
+                    for running_test in list(self.running_processes):
+                        if not running_test.is_alive():
+                            running_test.join()  # 回收进程资源
+                            self.running_processes.remove(running_test)
+                            db_manager.update_test_by_id(
+                                id=running_test.id,
+                                end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                                status="finished"
+                            )
+                            logger.info(
+                                f"[实验 {self.name}] 回收完成进程 | 测试ID={getattr(running_test, 'id', '未知')}")
 
-                logger.debug(f"[实验 {self.name}] 等待进程释放 | 当前并发: {len(self.running_processes)}/{MAX_WORKERS}")
+                    logger.debug(
+                        f"[实验 {self.name}] 等待进程释放 | 当前并发: {len(self.running_processes)}/{MAX_WORKERS}")
 
-            # 启动新的测试进程并加入运行列表
-            try:
-                test_instance.start()
-                self.running_processes.append(test_instance)
-                logger.info(f"[实验 {self.name}] 启动测试 {idx}/{len(self.test_instances)} | ID={test_instance.id}")
-            except Exception as e:
-                logger.error(f"[实验 {self.name}] 启动测试{idx}失败 | ID={test_instance.id} | 错误: {str(e)}",
-                             exc_info=True)
+                # 启动新的测试进程并加入运行列表
+                try:
+                    test_instance.start()
+                    db_manager.update_test_by_id(
+                        id=test_instance.id,
+                        start_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                        status="running"
+                    )
+                    self.running_processes.append(test_instance)
+                    logger.info(
+                        f"[实验 {self.name}] 启动测试 {idx}/{len(self.test_instances)} | ID={test_instance.console_id}")
+                except Exception as e:
+                    logger.error(
+                        f"[实验 {self.name}] 启动测试{idx}失败 | ID={test_instance.console_id} | 错误: {str(e)}",
+                        exc_info=True)
 
-        # 等待所有剩余的进程执行完成并回收资源
-        logger.info(f"\n[实验 {self.name}] 所有测试已启动，等待 {len(self.running_processes)} 个进程完成...")
-        for idx, remaining_test in enumerate(self.running_processes, 1):
-            if remaining_test.is_alive():
-                logger.debug(f"[实验 {self.name}] 等待进程{idx}完成 | ID={getattr(remaining_test, 'id', '未知')}")
-                remaining_test.join()
-            logger.info(f"[实验 {self.name}] 进程{idx}执行完成，已回收资源")
+            # 等待所有剩余的进程执行完成并回收资源
+            logger.info(f"\n[实验 {self.name}] 所有测试已启动，等待 {len(self.running_processes)} 个进程完成...")
+            for idx, remaining_test in enumerate(self.running_processes, 1):
+                if remaining_test.is_alive():
+                    logger.debug(f"[实验 {self.name}] 等待进程{idx}完成 | ID={getattr(remaining_test, 'id', '未知')}")
+                    remaining_test.join()
+                db_manager.update_test_by_id(
+                    id=remaining_test.id,
+                    end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                    status="finished"
+                )
+                logger.info(f"[实验 {self.name}] 进程{idx}执行完成，已回收资源")
 
-        # 清空运行列表
-        self.running_processes.clear()
+            # 清空运行列表
+            self.running_processes.clear()
 
-        logger.info(f"[实验 {self.name}] 所有测试执行完成 ✅")
+            db_manager.update_experiment_by_name(
+                name=self.name,
+                end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                status="finished"
+            )
+
+            logger.info(f"[实验 {self.name}] 所有测试执行完成 ✅")
+
+        finally:
+            db_manager.close()
