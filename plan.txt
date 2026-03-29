@@ -1,15 +1,11 @@
-# 开发计划
-# todo Flask学习
-# todo 前后端接口设计
-# todo 后端模块编写
-# todo 前端组件布局设计
-# todo 复习HTML/CSS/JS
-# todo README文档编写
-
-# 待优化点
 # todo 单个测试进程失败的重试机制
 # todo 断点续跑
-# todo 超时控制
+# todo ast替代正则
+# todo log_metrics分批写入
+# todo 平滑处理scalar
+# todo 实现平行坐标图与排行榜
+# todo 页面美化
+
 
 
 

@@ -10,7 +10,7 @@ from typing import Dict, Optional
 from light_tuner.utils.code_injector import replace_parameter_dict_in_code
 from light_tuner.utils.file_operations import delete_file, create_temp_py_file
 from light_tuner.utils.logger import logger
-from light_tuner.utils.context import set_test_id, clear_test_id
+from light_tuner.utils.context import set_test_id, clear_test_id,set_console_test_id,clear_console_test_id
 
 
 class Test(multiprocessing.Process):
@@ -71,6 +71,7 @@ class Test(multiprocessing.Process):
 
         try:
             set_test_id(self.id)
+            set_console_test_id(self.console_id)
             # 步骤1：超参数注入到用户代码
             injected_code = replace_parameter_dict_in_code(
                 code_content=self.user_code,
@@ -96,6 +97,7 @@ class Test(multiprocessing.Process):
 
         finally:
             clear_test_id()
+            clear_console_test_id()
             # 步骤4：确保临时文件被清理，避免文件残留
             if temp_file_path:
                 delete_file(temp_file_path)

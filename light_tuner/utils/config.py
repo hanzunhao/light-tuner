@@ -4,6 +4,8 @@
 """
 import logging
 
+CONSOLE_PRINT_METRICS = True
+
 MAX_WORKERS = 2
 
 BACKEND_URL = "http://localhost:8080/api"
@@ -18,5 +20,3 @@ COLOR_CODES = {
     logging.ERROR: "\033[0;31m",  # 红色 (ERROR)
     logging.CRITICAL: "\033[1;31m"  # 亮红色 (CRITICAL)
 }
-
-AUTOLOG_ENABLED = False

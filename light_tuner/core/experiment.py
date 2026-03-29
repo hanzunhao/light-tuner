@@ -191,7 +191,7 @@ class Experiment:
             console_test_id = config_id + 1
             # 插入测试记录
             db_test_id = db_manager.insert_test(
-                experiment_id=db_manager.select_experiment_by_name(self.name)[0]["id"],
+                experiment_id=db_manager.select_experiments(self.name)[0]["id"],
                 hparams=str(hparams_config),
                 start_time=None,
                 end_time=None,

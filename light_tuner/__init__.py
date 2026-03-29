@@ -5,6 +5,7 @@ from .core.log_metrics import log_metrics
 from .utils import logger, config, code_injector, file_operations
 from .storage.sqlite_manager import db_manager
 from .utils.context import set_test_id, get_test_id, clear_test_id
+from .utils.helper import helper
 
 __all__ = [
     "Experiment",
@@ -19,5 +20,6 @@ __all__ = [
     "db_manager",
     "set_test_id",
     "get_test_id",
-    "clear_test_id"
+    "clear_test_id",
+    "helper"
 ]
