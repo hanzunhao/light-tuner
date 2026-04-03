@@ -26,7 +26,8 @@ if __name__ == '__main__':
         search_mode="random",           # Mode: "random" or "grid"
         user_code_path=path,            # Path to the training code
         random_search_sample_num=5,     # Number of samples (for random search only)
-        user_params_dict_name="params"  # Name of the dict to inject into user code
+        user_params_dict_name="params", # Name of the dict to inject into user code
+        max_workers=1                   # Maximum number of concurrent training processes
     )
 
     # 4. Start batch parallel execution
