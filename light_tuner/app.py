@@ -1,13 +1,25 @@
+import argparse
+import os
+import sys
 from datetime import datetime
 from typing import Any
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from light_tuner.utils.logger import logger
-from light_tuner.storage.sqlite_manager import db_manager  # 根据实际路径调整
+from light_tuner.storage.sqlite_manager import SQLiteManager
 import json
+from pathlib import Path
 
+root_path = os.path.dirname(os.path.abspath(__file__))
+template_folder = os.path.join(root_path, "templates")
+static_folder = os.path.join(root_path, "static")
 # 初始化 Flask 应用
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=template_folder,
+    static_folder=static_folder,
+    static_url_path="/static"  # 必须与 Vue 打包时的 base: '/static/' 对应
+)
 # 允许跨域
 CORS(app, resources=r"/*")
 
@@ -135,11 +147,53 @@ def get_metrics():
         return error_response(f"服务器内部错误：{str(e)}")
 
 
+# -------------------------- 静态资源托管 --------------------------
+
+@app.route("/")
+def index():
+    """托管 Vue 入口文件"""
+    try:
+        return render_template("index.html")
+    except Exception:
+        return "<h1>LightTuner UI</h1><p>未找到前端静态文件。请确保 templates/index.html 存在。</p>", 404
+
+
+@app.route("/<path:path>")
+def static_proxy(path):
+    """处理 static 目录下的其他资源 (如 logo.svg, favicon.ico)"""
+    return send_from_directory(app.static_folder, path)
+
+
+@app.errorhandler(404)
+def catch_all(e):
+    """兜底路由：处理 Vue Router 的 History 模式"""
+    # 如果请求的是 API 但不存在，返回 404 API 响应
+    if request.path.startswith("/api/"):
+        return error_response("API 接口不存在", code=404)
+    # 否则一律返回 index.html，交给前端路由处理
+    return render_template("index.html")
+
+
 # -------------------------- 启动服务 --------------------------
 if __name__ == "__main__":
-    # 开发环境配置：调试模式开启，端口8080，允许外部访问
-    app.run(
-        host="0.0.0.0",  # 允许局域网/外网访问
-        port=8080,  # 端口号
-        debug=True  # 调试模式（生产环境需关闭）
+    parser = argparse.ArgumentParser(description="LightTuner UI")
+    parser.add_argument(
+        "--db_dir",
+        type=str
     )
+    args = parser.parse_args()
+
+    try:
+        db_manager = SQLiteManager(Path(args.db_dir) / "light_tuner.db")
+        # db_manager = SQLiteManager(r"D:\Program Files\Code\Python\light-tuner\examples\light_tuner.db")
+        # python -m light_tuner.app --db "D:\Program Files\Code\Python\light-tuner\examples"
+
+        # 3. 启动 Flask
+        app.run(
+            host="0.0.0.0",
+            port=8080,
+            debug=False
+        )
+    except Exception as e:
+        logger.error(f"❌ 服务启动失败: {e}")
+        sys.exit(1)

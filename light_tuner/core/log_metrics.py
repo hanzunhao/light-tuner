@@ -1,6 +1,7 @@
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional
-from light_tuner.storage.sqlite_manager import db_manager
+from light_tuner.storage.sqlite_manager import SQLiteManager
 from light_tuner.utils.context import get_test_id, get_console_test_id
 from light_tuner.utils.config import CONSOLE_PRINT_METRICS
 
@@ -11,6 +12,7 @@ def log_metrics(
         step: int = 0,
         tag: Optional[str] = None,
         data_type: Optional[str] = None
+
 ) -> None:
     """
     记录训练指标，支持自动识别标量与复杂数据结构
@@ -21,6 +23,8 @@ def log_metrics(
     :param tag: 自定义标记
     :param data_type: 强制指定类型，不传则由函数自动推断
     """
+
+    db = SQLiteManager(os.getenv('LIGHT_TUNER_DB_PATH'))
     console_test_id = get_console_test_id()
     test_id = get_test_id()
     record_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -58,7 +62,7 @@ def log_metrics(
             else:
                 current_type = 'scalar'
 
-        db_manager.insert_metric(
+        db.insert_metric(
             test_id=test_id,
             epoch=epoch,
             step=step,

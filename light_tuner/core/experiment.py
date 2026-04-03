@@ -4,13 +4,15 @@
 支持网格搜索/随机搜索两种模式，实现多进程并发测试控制。
 """
 import datetime
+import os
+from pathlib import Path
 from typing import Dict, Literal, List, Optional
 import multiprocessing
 
 # 本地模块导入
 from .param_generator import generate_grid_search_params, generate_random_search_params
 from .test import Test
-from light_tuner.storage.sqlite_manager import db_manager
+from light_tuner.storage.sqlite_manager import SQLiteManager
 from light_tuner.utils.config import MAX_WORKERS
 from light_tuner.utils.file_operations import read_file
 from light_tuner.utils.logger import logger
@@ -65,6 +67,12 @@ class Experiment:
             ValueError: 当传入不支持的搜索模式时抛出
             FileNotFoundError: 当用户代码文件路径不存在时抛出
         """
+
+        run_dir = Path(os.path.abspath(user_code_path)).parent
+        self.db_path = str(run_dir / "light_tuner.db")
+        os.environ["LIGHT_TUNER_DB_PATH"] = self.db_path
+        self.db_manager = SQLiteManager(self.db_path)
+
         # 基础实验配置
         self.name = name
         self.hparams_space = hparams_space
@@ -95,7 +103,7 @@ class Experiment:
         else:
             self.random_search_sample_num = None
 
-        db_manager.insert_experiment(
+        self.db_manager.insert_experiment(
             name=self.name,
             search_mode=self.search_mode,
             random_search_sample_num=self.random_search_sample_num,
@@ -190,8 +198,8 @@ class Experiment:
         for config_id, hparams_config in enumerate(self.hparams_configs):
             console_test_id = config_id + 1
             # 插入测试记录
-            db_test_id = db_manager.insert_test(
-                experiment_id=db_manager.select_experiments(self.name)[0]["id"],
+            db_test_id = self.db_manager.insert_test(
+                experiment_id=self.db_manager.select_experiments(self.name)[0]["id"],
                 hparams=str(hparams_config),
                 start_time=None,
                 end_time=None,
@@ -236,7 +244,7 @@ class Experiment:
                         if not running_test.is_alive():
                             running_test.join()  # 回收进程资源
                             self.running_processes.remove(running_test)
-                            db_manager.update_test_by_id(
+                            self.db_manager.update_test_by_id(
                                 id=running_test.id,
                                 end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                                 status="finished"
@@ -250,7 +258,7 @@ class Experiment:
                 # 启动新的测试进程并加入运行列表
                 try:
                     test_instance.start()
-                    db_manager.update_test_by_id(
+                    self.db_manager.update_test_by_id(
                         id=test_instance.id,
                         start_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                         status="running"
@@ -269,7 +277,7 @@ class Experiment:
                 if remaining_test.is_alive():
                     logger.debug(f"[实验 {self.name}] 等待进程{idx}完成 | ID={getattr(remaining_test, 'id', '未知')}")
                     remaining_test.join()
-                db_manager.update_test_by_id(
+                self.db_manager.update_test_by_id(
                     id=remaining_test.id,
                     end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                     status="finished"
@@ -279,7 +287,7 @@ class Experiment:
             # 清空运行列表
             self.running_processes.clear()
 
-            db_manager.update_experiment_by_name(
+            self.db_manager.update_experiment_by_name(
                 name=self.name,
                 end_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                 status="finished"
@@ -288,4 +296,4 @@ class Experiment:
             logger.info(f"[实验 {self.name}] 所有测试执行完成 ✅")
 
         finally:
-            db_manager.close()
+            self.db_manager.close()

@@ -1,38 +1,13 @@
 import json
-import os
 import sqlite3
-import sys
 from datetime import datetime
-from pathlib import Path
 from typing import List, Optional, Any
 from light_tuner.utils.logger import logger
 
 
 class SQLiteManager:
-    def __init__(self,path=None):
-        try:
-            # --- 方案 A：跟随入口文件 (脚本模式) ---
-            # sys.argv[0] 获取当前启动的脚本绝对路径（例如：D:/project/train.py）
-            # .parent 获取该脚本所在的文件夹
-            # 优点：数据库永远生成在用户的代码目录下，方便用户直接查看和拷贝
-            run_dir = Path(os.path.abspath(sys.argv[0])).parent
-            self.path = run_dir / "light_tuner.db"
-        except ImportError:
-            # --- 方案 B：跟随当前工作目录 (交互式/异常兜底) ---
-            # 当在 Jupyter Notebook、嵌入式环境或 sys.argv 失效时触发
-            # os.getcwd() 获取用户当前终端所在的目录
-            # 优点：保证程序在任何环境下都能找到一个合法的路径创建数据库
-            self.path = Path(os.getcwd()) / "light_tuner.db"
-
-        # # 获取包路径并拼接数据库文件名称
-        # try:
-        #     package_root = importlib_files("light_tuner")
-        #     self.path = Path(package_root) / "light_tuner.db"
-        # except ImportError:
-        #     from pkg_resources import resource_filename
-        #     package_root = resource_filename("light_tuner", "")
-        #     self.path = Path(package_root) / "light_tuner.db"
-
+    def __init__(self, path):
+        self.path = path
         self.conn = self._get_connection()
         self.create_tables()
 
@@ -325,9 +300,9 @@ class SQLiteManager:
         sql = "SELECT * FROM Test WHERE id = ?"
         cursor = self.conn.cursor()
         try:
-            self.cursor.execute(sql, (id,))
-            columns = [desc[0] for desc in self.cursor.description]
-            result = self.cursor.fetchone()
+            cursor.execute(sql, (id,))
+            columns = [desc[0] for desc in cursor.description]
+            result = cursor.fetchone()
             if not result:
                 logger.info(f"未找到ID为{id}的测试记录")
                 return []
@@ -500,6 +475,3 @@ class SQLiteManager:
             return []
         finally:
             cursor.close()
-
-
-db_manager = SQLiteManager()
