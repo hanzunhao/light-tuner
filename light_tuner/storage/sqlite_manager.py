@@ -110,7 +110,6 @@ class SQLiteManager:
 
     # 关闭数据库连接
     def close(self) -> None:
-        self.cursor.close()
         self.conn.close()
         logger.info("数据库连接已关闭")
 
