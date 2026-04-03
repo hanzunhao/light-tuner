@@ -1,6 +1,7 @@
 """
-代码参数注入工具模块
-提供字典转Python字符串、代码中参数字典替换等功能，支持动态修改代码中的参数配置
+Code Parameter Injection Utility Module
+Provides functionality to convert dictionaries to Python strings and replace
+parameter dictionaries within source code using AST manipulation.
 """
 import ast
 from typing import Dict, Any
@@ -9,11 +10,11 @@ from light_tuner.utils.logger import logger
 
 def convert_dict_to_python_str(parameters: Dict[Any, Any]) -> str:
     """
-    将字典转换为合法的Python字典字符串
+    Converts a dictionary into a valid Python dictionary string representation.
     """
-    # 输入类型校验
+    # Validate input type
     if not isinstance(parameters, dict):
-        error_msg = f"字典转换失败：输入必须是字典类型，当前类型: {type(parameters)}"
+        error_msg = f"Dictionary conversion failed: Input must be a dict, got {type(parameters)}."
         logger.error(error_msg)
         raise TypeError(error_msg)
 
@@ -25,42 +26,59 @@ def replace_parameter_dict_in_code(
         target_dict_name: str,
         new_parameter_dict: Dict[Any, Any]
 ) -> str:
+    """
+    Injects a new parameter dictionary into the source code by finding and
+    replacing a specific variable assignment using Abstract Syntax Trees (AST).
 
+    Args:
+        code_content: The original Python source code string.
+        target_dict_name: The name of the dictionary variable to be replaced.
+        new_parameter_dict: The dictionary containing the new hyperparameter values.
+
+    Returns:
+        str: The modified source code with the injected parameters.
+    """
     if not code_content:
-        logger.error("代码参数注入失败：原始代码内容为空")
-        raise ValueError("code_content 不能为空字符串")
+        logger.error("Code injection failed: Original code content is empty.")
+        raise ValueError("code_content cannot be an empty string.")
 
     if not target_dict_name:
-        logger.error("代码参数注入失败：目标字典变量名不能为空")
-        raise ValueError("target_dict_name 不能为空字符串")
+        logger.error("Code injection failed: Target dictionary variable name cannot be empty.")
+        raise ValueError("target_dict_name cannot be an empty string.")
 
     if not isinstance(new_parameter_dict, dict):
-        logger.error(f"代码参数注入失败：新参数字典必须是字典类型，当前类型: {type(new_parameter_dict)}")
-        raise TypeError(f"代码参数注入失败：新参数字典必须是字典类型，当前类型: {type(new_parameter_dict)}")
+        error_type = type(new_parameter_dict)
+        logger.error(f"Code injection failed: New parameter dict must be a dict type, got {error_type}.")
+        raise TypeError(f"New parameter dict must be a dict type, got {error_type}.")
 
     try:
-        tree=ast.parse(code_content)
+        # Parse the source code into an AST
+        tree = ast.parse(code_content)
         replaced = False
-        new_dict_node=ast.parse(convert_dict_to_python_str(new_parameter_dict)).body[0].value
 
+        # Create a new AST node from the new dictionary
+        # ast.parse returns a Module; we extract the value from the first expression
+        new_dict_node = ast.parse(convert_dict_to_python_str(new_parameter_dict)).body[0].value
+
+        # Walk through the tree to find the target assignment
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == target_dict_name:
-                        # 执行替换：将旧的右值替换为新生成的节点
+                        # Perform replacement: Replace the old right-hand side with the new node
                         node.value = new_dict_node
                         replaced = True
 
         if not replaced:
-            logger.warning(f"未在代码中找到可替换的字典变量 '{target_dict_name}'")
+            logger.warning(f"Could not find a replaceable dictionary variable named '{target_dict_name}' in the code.")
             return code_content
 
-        # 6. 将修改后的树还原为代码字符串
+        # Unparse the modified AST back into source code string
         return ast.unparse(tree)
 
     except SyntaxError as se:
-        logger.error(f"代码注入失败，源码存在语法错误: {se}")
+        logger.error(f"Code injection failed due to syntax errors in source: {se}")
         return code_content
     except Exception as e:
-        logger.error(f"AST 处理过程中发生异常: {e}")
+        logger.error(f"An unexpected error occurred during AST processing: {e}")
         return code_content

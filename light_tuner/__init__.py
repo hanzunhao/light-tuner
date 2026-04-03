@@ -17,7 +17,7 @@ __all__ = [
     "file_operations",
     "config",
     "log_metrics",
-    "db_manager",
+    "SQLiteManager",
     "set_test_id",
     "get_test_id",
     "clear_test_id",

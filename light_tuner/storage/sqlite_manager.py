@@ -11,25 +11,25 @@ class SQLiteManager:
         self.conn = self._get_connection()
         self.create_tables()
 
-    # 返回数据库连接
+    # Returns the database connection
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(
             self.path,
             check_same_thread=False,
             timeout=10
         )
-        # 启用WAL模式
+        # Enable WAL mode for concurrent access
         conn.execute("PRAGMA journal_mode=WAL")
-        # 启用外键约束
+        # Enable foreign key constraints
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
-    # 创建表结构
+    # Creates table structures
     def create_tables(self) -> None:
         cursor = self.conn.cursor()
 
         try:
-            # 1. 实验表
+            # 1. Experiment table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Experiment (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -45,7 +45,7 @@ class SQLiteManager:
                 );
             """)
 
-            # 2. 测试表（单组参数执行记录）
+            # 2. Test table (execution records for a single set of parameters)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Test (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -58,7 +58,7 @@ class SQLiteManager:
                 );
             """)
 
-            # 3. 指标表
+            # 3. Metric table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS Metric (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -73,26 +73,26 @@ class SQLiteManager:
                     FOREIGN KEY (test_id) REFERENCES Test(id) ON DELETE CASCADE ON UPDATE CASCADE
                 );
             """)
-            # 4.创建索引
+            # 4. Create index
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_metric_test_name ON Metric (test_id, metric_name);")
-            # 提交事务
+            # Commit transaction
             self.conn.commit()
         except Exception as e:
             self.conn.rollback()
-            logger.error(f"初始化数据库表结构失败: {e}", exc_info=True)
+            logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
         finally:
             cursor.close()
 
-    # 关闭数据库连接
+    # Closes the database connection
     def close(self) -> None:
         self.conn.close()
-        logger.info("数据库连接已关闭")
+        logger.info("Database connection closed")
 
     """
-    EXPERIMENT操作
+    EXPERIMENT Operations
     """
 
-    # 插入实验记录
+    # Inserts an experiment record
     def insert_experiment(self, name, search_mode, random_search_sample_num, user_code_path, user_params_dict_name,
                           hparams_space, start_time, end_time, status) -> bool:
         sql = """
@@ -115,29 +115,29 @@ class SQLiteManager:
             return True
         except self.conn.Error as e:
             self.conn.rollback()
-            logger.error(f"插入实验记录（{name}）时数据库操作错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while inserting experiment record ({name}): {str(e)}", exc_info=True)
             return False
         except Exception as e:
             self.conn.rollback()
-            logger.error(f"插入实验记录（{name}）时发生未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while inserting experiment record ({name}): {str(e)}", exc_info=True)
             return False
         finally:
             cursor.close()
 
-    # 按名称、搜索模式、状态查询实验记录（支持动态条件 + 升降序控制）
+    # Query experiments by name, mode, and status (supports dynamic conditions + sorting)
     def select_experiments(
             self,
             name: Optional[str] = None,
             status: Optional[str] = None,
             search_mode: Optional[str] = None,
-            sort_by: str = "name",  # 排序字段，默认按start_time
-            sort_order: str = "DESC"  # 排序方向，默认降序（DESC），可选 ASC（升序）
+            sort_by: str = "name",  # Default sorting field
+            sort_order: str = "DESC"  # Default sorting order (DESC), optional: ASC
     ) -> List:
-        # 1. 初始化条件列表和参数列表
+        # 1. Initialize condition and parameter lists
         conditions = []
         params = []
 
-        # 2. 非空检查：只有参数不为空时，才添加对应的查询条件
+        # 2. Null check: Add conditions only if parameters are provided
         if name:
             conditions.append("name LIKE ?")
             params.append(f"%{name}%")
@@ -148,21 +148,20 @@ class SQLiteManager:
             conditions.append("search_mode = ?")
             params.append(search_mode)
 
-        # 3. 校验排序方向（防止传入非法值导致SQL错误）
+        # 3. Validate sort order to prevent SQL injection
         valid_sort_orders = ["ASC", "DESC"]
-        # 统一转为大写，兼容小写输入（如 "asc" "desc"）
         sort_order = sort_order.strip().upper()
         if sort_order not in valid_sort_orders:
-            logger.warning(f"无效的排序方向：{sort_order}，已自动转为默认值 DESC")
+            logger.warning(f"Invalid sort order: {sort_order}, defaulting to DESC")
             sort_order = "DESC"
 
-        # 4. 校验排序字段（限制可选字段，防止SQL注入/非法字段）
+        # 4. Validate sort field to prevent SQL injection
         valid_sort_fields = ["start_time", "name"]
         if sort_by not in valid_sort_fields:
-            logger.warning(f"无效的排序字段：{sort_by}，已自动转为默认值 name")
+            logger.warning(f"Invalid sort field: {sort_by}, defaulting to start_time")
             sort_by = "start_time"
 
-        # 5. 拼接SQL语句
+        # 5. Join SQL statement
         if conditions:
             sql = f"""
                 SELECT * FROM Experiment 
@@ -182,18 +181,18 @@ class SQLiteManager:
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             return results
         except self.conn.Error as e:
-            logger.error(f"查询实验记录时数据库错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while querying experiments: {str(e)}", exc_info=True)
             return []
         except Exception as e:
-            logger.error(f"查询实验记录时未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while querying experiments: {str(e)}", exc_info=True)
             return []
         finally:
             cursor.close()
 
-    # 按名称查找并修改实验记录
+    # Find and update an experiment record by name
     def update_experiment_by_name(self, name, **kwargs) -> bool:
         if not kwargs:
-            logger.warning("更新实验记录失败：未指定更新字段")
+            logger.warning("Failed to update experiment: No fields specified")
             return False
 
         valid_fields = ['search_mode', 'random_search_sample_num', 'user_code_path',
@@ -204,13 +203,13 @@ class SQLiteManager:
         update_values = []
         for key, value in kwargs.items():
             if key not in valid_fields:
-                logger.warning(f"忽略无效字段：{key}")
+                logger.warning(f"Ignoring invalid field: {key}")
                 continue
             update_fields.append(f"{key} = ?")
             update_values.append(value)
 
         if not update_fields:
-            logger.warning("更新实验记录失败：无有效更新字段")
+            logger.warning("Failed to update experiment: No valid fields found")
             return False
 
         sql = f"UPDATE Experiment SET {', '.join(update_fields)} WHERE name = ?"
@@ -221,26 +220,26 @@ class SQLiteManager:
         try:
             cursor.execute(sql, tuple(update_values))
             if cursor.rowcount == 0:
-                logger.warning(f"更新实验记录失败：未找到名称为{name}的实验")
+                logger.warning(f"Failed to update experiment: Experiment with name '{name}' not found")
                 return False
             self.conn.commit()
             return True
         except self.conn.Error as e:
             self.conn.rollback()
-            logger.error(f"更新实验记录（{name}）时数据库错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while updating experiment ({name}): {str(e)}", exc_info=True)
             return False
         except Exception as e:
             self.conn.rollback()
-            logger.error(f"更新实验记录（{name}）时未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while updating experiment ({name}): {str(e)}", exc_info=True)
             return False
         finally:
             cursor.close()
 
     """
-    TEST操作
+    TEST Operations
     """
 
-    # 新增测试记录
+    # Add a new test record
     def insert_test(self, experiment_id, hparams, start_time, end_time, status) -> Optional[int]:
         sql = """
             INSERT INTO Test (
@@ -263,21 +262,21 @@ class SQLiteManager:
         except self.conn.Error as e:
             self.conn.rollback()
             logger.error(
-                f"插入测试记录（关联实验ID：{experiment_id}）时数据库操作错误：{str(e)}",
+                f"Database error while inserting test record (Exp ID: {experiment_id}): {str(e)}",
                 exc_info=True
             )
             return None
         except Exception as e:
             self.conn.rollback()
             logger.error(
-                f"插入测试记录（关联实验ID：{experiment_id}）时发生未知错误：{str(e)}",
+                f"Unexpected error while inserting test record (Exp ID: {experiment_id}): {str(e)}",
                 exc_info=True
             )
             return None
         finally:
             cursor.close()
 
-    # 按实验id查询测试记录
+    # Query test records by experiment id
     def select_test_by_experiment_id(self, experiment_id) -> List:
         sql = "SELECT * FROM Test WHERE experiment_id = ? ORDER BY start_time DESC"
         cursor = self.conn.cursor()
@@ -287,15 +286,15 @@ class SQLiteManager:
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             return results
         except self.conn.Error as e:
-            logger.error(f"查询实验ID{experiment_id}的测试记录时数据库错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while querying tests for Exp ID {experiment_id}: {str(e)}", exc_info=True)
             return []
         except Exception as e:
-            logger.error(f"查询实验ID{experiment_id}的测试记录时未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while querying tests for Exp ID {experiment_id}: {str(e)}", exc_info=True)
             return []
         finally:
             cursor.close()
 
-    # 按id查询测试记录
+    # Query test record by id
     def select_test_by_id(self, id) -> List:
         sql = "SELECT * FROM Test WHERE id = ?"
         cursor = self.conn.cursor()
@@ -304,22 +303,22 @@ class SQLiteManager:
             columns = [desc[0] for desc in cursor.description]
             result = cursor.fetchone()
             if not result:
-                logger.info(f"未找到ID为{id}的测试记录")
+                logger.info(f"Test record with ID {id} not found")
                 return []
             return [dict(zip(columns, result))]
         except self.conn.Error as e:
-            logger.error(f"查询测试记录（ID：{id}）时数据库错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while querying test record (ID: {id}): {str(e)}", exc_info=True)
             return []
         except Exception as e:
-            logger.error(f"查询测试记录（ID：{id}）时未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while querying test record (ID: {id}): {str(e)}", exc_info=True)
             return []
         finally:
             cursor.close()
 
-    # 按id查询并修改测试记录
+    # Find and update a test record by id
     def update_test_by_id(self, id, **kwargs) -> bool:
         if not kwargs:
-            logger.warning("更新测试记录失败：未指定更新字段")
+            logger.warning("Failed to update test record: No fields specified")
             return False
 
         valid_fields = ['experiment_id', 'hparams', 'start_time', 'end_time', 'status']
@@ -328,13 +327,13 @@ class SQLiteManager:
         update_values = []
         for key, value in kwargs.items():
             if key not in valid_fields:
-                logger.warning(f"忽略无效字段：{key}")
+                logger.warning(f"Ignoring invalid field: {key}")
                 continue
             update_fields.append(f"{key} = ?")
             update_values.append(value)
 
         if not update_fields:
-            logger.warning("更新测试记录失败：无有效更新字段")
+            logger.warning("Failed to update test record: No valid fields found")
             return False
 
         sql = f"UPDATE Test SET {', '.join(update_fields)} WHERE id = ?"
@@ -343,26 +342,26 @@ class SQLiteManager:
         try:
             cursor.execute(sql, tuple(update_values))
             if cursor.rowcount == 0:
-                logger.warning(f"更新测试记录失败：未找到ID为{id}的测试")
+                logger.warning(f"Failed to update test record: Test with ID {id} not found")
                 return False
             self.conn.commit()
             return True
         except self.conn.Error as e:
             self.conn.rollback()
-            logger.error(f"更新测试记录（ID：{id}）时数据库错误：{str(e)}", exc_info=True)
+            logger.error(f"Database error while updating test record (ID: {id}): {str(e)}", exc_info=True)
             return False
         except Exception as e:
             self.conn.rollback()
-            logger.error(f"更新测试记录（ID：{id}）时未知错误：{str(e)}", exc_info=True)
+            logger.error(f"Unexpected error while updating test record (ID: {id}): {str(e)}", exc_info=True)
             return False
         finally:
             cursor.close()
 
     """
-    METRIC操作
+    METRIC Operations
     """
 
-    # 新增指标记录
+    # Add a new metric record
     def insert_metric(
             self,
             test_id: int,
@@ -375,30 +374,30 @@ class SQLiteManager:
             record_time: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ) -> bool:
         """
-        匹配优化后的表结构，支持多维度指标存储
-        :param test_id: 测试任务ID
-        :param metric_name: 指标名称 (如 'loss', 'confusion_matrix')
-        :param metric_val: 指标值 (支持数字、列表、字典)
-        :param epoch: 当前轮次
-        :param step: 当前步数 (默认为0)
-        :param data_type: 数据类型 ('scalar', 'array', 'matrix', 'json')
-        :param tag: 阶段标记 ('train', 'val', 'test')
-        :param record_time: 记录时间
+        Supports multi-dimensional metric storage matching the optimized table structure.
+        :param test_id: Test task ID
+        :param metric_name: Name of the metric (e.g., 'loss', 'confusion_matrix')
+        :param metric_val: Value (supports number, list, dict)
+        :param epoch: Current epoch
+        :param step: Current step (default: 0)
+        :param data_type: Data type ('scalar', 'array', 'matrix', 'json')
+        :param tag: Stage tag ('train', 'val', 'test')
+        :param record_time: Time of recording
         """
-        # --- 1. 数据预处理 ---
-        # 如果 metric_val 是列表或字典，自动转换为 JSON 字符串存入 TEXT 字段
+        # --- 1. Data Pre-processing ---
+        # Convert lists/dicts to JSON strings for TEXT field storage
         processed_val = metric_val
         if isinstance(metric_val, (list, dict)):
             try:
                 processed_val = json.dumps(metric_val)
             except Exception as e:
-                logger.error(f"序列化指标 {metric_name} 失败: {e}")
+                logger.error(f"Failed to serialize metric {metric_name}: {e}")
                 return False
         else:
-            # 确保标量也转为字符串存储，匹配 TEXT 类型
+            # Ensure scalar is stored as string to match TEXT type
             processed_val = str(metric_val)
 
-        # --- 2. SQL 执行 ---
+        # --- 2. SQL Execution ---
         sql = """
                 INSERT INTO Metric (
                     test_id, epoch, step, metric_name, metric_val, data_type, tag, record_time
@@ -413,13 +412,13 @@ class SQLiteManager:
         except self.conn.Error as e:
             self.conn.rollback()
             logger.error(
-                f"插入指标记录失败（测试ID：{test_id}，指标名：{metric_name}）数据库错误：{str(e)}"
+                f"Database error while inserting metric (Test ID: {test_id}, Name: {metric_name}): {str(e)}"
             )
             return False
         except Exception as e:
             self.conn.rollback()
             logger.error(
-                f"插入指标记录失败（测试ID：{test_id}，指标名：{metric_name}）未知错误：{str(e)}",
+                f"Unexpected error while inserting metric (Test ID: {test_id}, Name: {metric_name}): {str(e)}",
                 exc_info=True
             )
             return False
@@ -434,23 +433,23 @@ class SQLiteManager:
             data_type: Optional[str] = None
     ) -> List[dict]:
         """
-        根据多个测试ID批量查询指标记录
-        :param test_id_list: 测试ID列表 (必填)
-        :param metric_name: 指标名称
-        :param tag: 阶段
-        :param data_type: 类型
+        Batch query metrics based on multiple test IDs.
+        :param test_id_list: List of Test IDs (Required)
+        :param metric_name: Metric name filter
+        :param tag: Stage filter
+        :param data_type: Type filter
         """
         if not test_id_list:
             return []
 
-        # 1. 动态生成 IN 子句的占位符
+        # 1. Dynamically generate placeholders for IN clause
         placeholders = ', '.join(['?'] * len(test_id_list))
 
-        # 2. 构建基础 SQL，使用 IN 语法
+        # 2. Build base SQL using IN syntax
         sql = f"SELECT * FROM Metric WHERE test_id IN ({placeholders})"
         params = list(test_id_list)
 
-        # 3. 动态拼接其他过滤条件
+        # 3. Dynamically append other filtering conditions
         if metric_name:
             sql += " AND metric_name = ?"
             params.append(metric_name)
@@ -463,15 +462,15 @@ class SQLiteManager:
         cursor = self.conn.cursor()
 
         try:
-            # 4. 执行查询
+            # 4. Execute query
             cursor.execute(sql, tuple(params))
             results = cursor.fetchall()
 
-            # 转换为字典列表
+            # Convert to list of dictionaries
             columns = [desc[0] for desc in cursor.description]
             return [dict(zip(columns, row)) for row in results]
         except Exception as e:
-            logger.error(f"批量查询指标失败 [TestIDs: {test_id_list}]: {e}")
+            logger.error(f"Failed to batch query metrics [TestIDs: {test_id_list}]: {e}")
             return []
         finally:
             cursor.close()

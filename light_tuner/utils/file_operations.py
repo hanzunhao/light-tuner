@@ -1,6 +1,7 @@
 """
-文件操作工具模块
-提供临时Python文件创建、文件读取、文件删除等常用文件操作功能
+File Operations Utility Module
+Provides common file manipulation functions such as creating temporary Python files,
+reading file contents, and secure file deletion.
 """
 import os
 import tempfile
@@ -10,36 +11,39 @@ from light_tuner.utils.logger import logger
 
 def create_temp_py_file(content: str) -> Optional[str]:
     """
-    创建临时Python文件并写入指定内容
+    Creates a temporary Python file and writes the specified content to it.
 
-    创建一个后缀为.py的临时文件，写入指定字符串内容，文件不会自动删除，
-    需调用delete_file手动清理。适用于需要临时生成Python脚本的场景。
+    Creates a temporary file with a .py extension. The file is NOT automatically
+    deleted by the OS; it must be manually cleaned up using delete_file().
+    This is specifically designed for generating executable Python scripts
+    on the fly.
 
     Args:
-        content: 要写入临时文件的字符串内容
+        content: The string content to be written into the temporary file.
 
     Returns:
-        Optional[str]: 成功创建则返回临时文件的绝对路径；
-                      若输入内容为空或创建失败则返回None
+        Optional[str]: The absolute path to the temporary file if successful;
+                      None if content is empty or creation fails.
 
     Raises:
-        IOError: 当文件写入操作失败时抛出
+        IOError: If writing to the file fails.
     """
-    # 空内容校验
     if not content:
-        logger.warning("创建临时文件失败：内容为空")
+        logger.warning("Failed to create temporary file: Content is empty.")
         return None
 
     try:
-        # 在用户代码顶部注入
-        freeze_support_code = """import multiprocessing
-multiprocessing.freeze_support()
-"""
+        # Inject multi-processing support at the top of the user script
+        # This is critical for compatibility across different Operating Systems.
+        freeze_support_code = (
+            "import multiprocessing\n"
+            "multiprocessing.freeze_support()\n"
+        )
 
-        # 合并注入代码和用户代码
+        # Merge injected boilerplate with the actual user code
         final_content = freeze_support_code + content
 
-        # 创建不自动删除的临时Python文件
+        # Create a persistent temporary file (delete=False)
         with tempfile.NamedTemporaryFile(
                 mode='w',
                 suffix='.py',
@@ -48,46 +52,42 @@ multiprocessing.freeze_support()
         ) as temp_file:
             temp_file.write(final_content)
             temp_file_path = temp_file.name
+
         return os.path.abspath(temp_file_path)
     except IOError as e:
-        logger.error(f"创建临时文件失败：{str(e)}", exc_info=True)
+        logger.error(f"Failed to create temporary file: {str(e)}", exc_info=True)
         return None
 
 
 def read_file(file_path: str) -> Optional[str]:
     """
-    读取指定路径的文件内容（UTF-8编码）
+    Reads the content of a file using UTF-8 encoding.
 
-    安全读取文本文件内容，包含完善的异常处理，避免因文件不存在、权限不足等
-    问题导致程序崩溃。
+    Safely reads a text file with comprehensive error handling to prevent
+    crashes due to missing files or permission issues.
 
     Args:
-        file_path: 要读取的文件路径（相对路径或绝对路径）
+        file_path: Path to the file (relative or absolute).
 
     Returns:
-        Optional[str]: 成功读取则返回文件内容字符串；
-                      若文件不存在/读取失败则返回None
+        Optional[str]: File content string if successful; None otherwise.
 
     Raises:
-        PermissionError: 当没有文件读取权限时抛出
-        UnicodeDecodeError: 当文件不是UTF-8编码时抛出
+        PermissionError: If the process lacks read permissions.
+        UnicodeDecodeError: If the file is not valid UTF-8.
     """
-    # 空路径校验
     if not file_path:
-        logger.warning("读取文件失败：路径为空")
+        logger.warning("Failed to read file: Path is empty.")
         return None
 
-    # 标准化路径
     normalized_path = os.path.abspath(file_path)
 
-    # 检查文件是否存在
     if not os.path.exists(file_path):
-        logger.warning(f"读取文件失败：文件不存在 - {normalized_path}")
+        logger.warning(f"Failed to read file: File does not exist - {normalized_path}")
         return None
 
-    # 检查路径是否为文件
     if not os.path.isfile(file_path):
-        logger.warning(f"读取文件失败：路径不是文件 - {normalized_path}")
+        logger.warning(f"Failed to read file: Path is not a file - {normalized_path}")
         return None
 
     try:
@@ -95,51 +95,42 @@ def read_file(file_path: str) -> Optional[str]:
             file_content = file_handler.read()
         return file_content
     except PermissionError:
-        logger.error(f"读取文件失败：无读取权限 - {normalized_path}")
+        logger.error(f"Failed to read file: Permission denied - {normalized_path}")
         return None
     except UnicodeDecodeError:
-        logger.error(f"读取文件失败：非UTF-8编码 - {file_path}", exc_info=True)
+        logger.error(f"Failed to read file: Not UTF-8 encoded - {file_path}", exc_info=True)
         return None
     except IOError as e:
-        logger.error(f"读取文件失败：IO错误 - {file_path} | {str(e)}", exc_info=True)
+        logger.error(f"Failed to read file: IO Error - {file_path} | {str(e)}", exc_info=True)
         return None
-    except Exception as e:  # 捕获其他未预期异常
-        logger.error(f"读取文件失败：未知错误 - {normalized_path} | {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Failed to read file: Unexpected error - {normalized_path} | {str(e)}", exc_info=True)
         return None
 
 
 def delete_file(file_path: Union[str, None]) -> None:
     """
-    安全删除指定路径的文件
+    Safely deletes a file at the specified path.
 
-    包含前置校验和异常处理，确保删除操作不会导致程序崩溃，支持传入None值。
+    Includes pre-validation and exception handling to ensure deletion attempts
+    do not crash the program. Supports None values.
 
     Args:
-        file_path: 要删除的文件路径（可为None）
-
-    Returns:
-        None
+        file_path: Path to the file to be deleted (can be None).
     """
-    # 空路径直接返回
     if not file_path:
         return
 
-    # 标准化路径
     normalized_path = os.path.abspath(file_path)
 
-    # 检查文件是否存在
-    if not os.path.exists(normalized_path):
-        return
-
-    # 检查路径是否为文件（避免误删目录）
-    if not os.path.isfile(normalized_path):
+    if not os.path.exists(normalized_path) or not os.path.isfile(normalized_path):
         return
 
     try:
         os.remove(file_path)
     except PermissionError:
-        logger.error(f"删除文件失败：无删除权限 - {normalized_path}")
+        logger.error(f"Failed to delete file: Permission denied - {normalized_path}")
     except IOError as e:
-        logger.error(f"删除文件失败：IO错误 - {normalized_path} | {str(e)}", exc_info=True)
-    except Exception as e:  # 捕获其他未预期异常
-        logger.error(f"删除文件失败：未知错误 - {normalized_path} | {str(e)}", exc_info=True)
+        logger.error(f"Failed to delete file: IO Error - {normalized_path} | {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Failed to delete file: Unexpected error - {normalized_path} | {str(e)}", exc_info=True)

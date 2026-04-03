@@ -15,6 +15,7 @@ if __name__ == '__main__':
         search_mode="random",
         user_code_path=path,
         random_search_sample_num=5,
+        max_workers=2,
         user_params_dict_name="params"
     )
 
