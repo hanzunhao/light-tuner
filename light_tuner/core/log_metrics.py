@@ -18,7 +18,7 @@ def log_metrics(
     :param metrics: 指标字典，如 {"loss": 0.1, "cm": [[1,0],[0,1]]}
     :param epoch: 当前轮次
     :param step: 当前迭代步数
-    :param tag: 阶段标记 ('train', 'val', 'test')
+    :param tag: 自定义标记
     :param data_type: 强制指定类型，不传则由函数自动推断
     """
     console_test_id = get_console_test_id()
@@ -27,7 +27,7 @@ def log_metrics(
 
     # 1. 控制台打印逻辑
     if CONSOLE_PRINT_METRICS:
-        print(f"\n{'=' * 30} Test {console_test_id} | {tag.upper()} | Epoch {epoch} | Step {step} {'=' * 30}")
+        print(f"\n{'=' * 30} Test {console_test_id} | Epoch {epoch} | Step {step} {'=' * 30}")
 
         for k, v in metrics.items():
             # 针对不同数据类型的打印优化

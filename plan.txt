@@ -2,9 +2,6 @@
 # todo 断点续跑
 # todo ast替代正则
 # todo log_metrics分批写入
-# todo 平滑处理scalar
-# todo 实现平行坐标图与排行榜
-# todo 页面美化
 
 
 

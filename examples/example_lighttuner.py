@@ -130,11 +130,11 @@ for epoch in range(params["epochs"]):
     # 2. 计算混淆矩阵 (Matrix)
     # 得到一个 10x10 的二维数组
     cm = confusion_matrix(all_targets, all_preds).tolist()
-    log_metrics(
-        {"confusion_matrix": cm},
-        epoch=epoch,
-        tag="val"
-    )
+    # log_metrics(
+    #     {"confusion_matrix": cm},
+    #     epoch=epoch,
+    #     tag="val"
+    # )
 
     # 3. 计算 PR 曲线数据 (Array)
     # 针对多分类，我们取其中一类（比如类别 0）作为代表展示曲线
@@ -151,10 +151,10 @@ for epoch in range(params["epochs"]):
     # 为了防止数据点过多导致数据库过大，可以进行降采样（每10个取1个）
     pr_data_sampled = pr_data[::10]
 
-    log_metrics(
-        {
-            "pr_curve_class_0": pr_data_sampled
-        },
-        epoch=epoch,
-        tag="val"
-    )
+    # log_metrics(
+    #     {
+    #         "pr_curve_class_0": pr_data_sampled
+    #     },
+    #     epoch=epoch,
+    #     tag="val"
+    # )
