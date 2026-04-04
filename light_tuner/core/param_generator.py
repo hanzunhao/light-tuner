@@ -90,45 +90,39 @@ def generate_random_search_params(
         num_samples: int
 ) -> List[Dict[str, Any]]:
     """
-    Random Search - Randomly generates a specified number of hyperparameter combinations.
+    Random Search - Generates a specified number of unique hyperparameter combinations
+    by sampling from the full grid.
 
-    Supports two types of hyperparameters:
-    1. Discrete: Passed as a list; one value is chosen at random.
-    2. Continuous: Passed as a (min, max, step) tuple; values are sampled from generated steps.
+    This method ensures uniqueness by first generating the entire search space (Cartesian product)
+    and then performing a random sample without replacement. This is more robust than
+    naive random selection when num_samples is close to the total grid size.
 
     Args:
-        hparams_space: A dictionary of hyperparameter spaces.
-        num_samples: The number of random combinations to generate.
+        hparams_space: A dictionary where keys are hyperparameter names and values are
+                       either lists of candidates or (min, max, step) tuples.
+        num_samples: The target number of random combinations to generate.
 
     Returns:
-        List[Dict[str, Any]]: A list of randomly generated hyperparameter combinations.
+        List[Dict[str, Any]]: A list of unique, randomly sampled hyperparameter configurations.
     """
-    # Normalize parameters and calculate total possible combinations (grid size)
-    normalized_hparams = {}
-    grid_total = 1
-    for param_name, param_config in hparams_space.items():
-        candidates = _normalize_hparam_config(param_name, param_config)
-        normalized_hparams[param_name] = candidates
-        grid_total *= len(candidates)
+    # 1. Reuse Grid Search logic to generate all theoretical combinations
+    # This ensures consistency in parameter normalization and Cartesian product generation.
+    all_possible_combinations = generate_grid_search_params(hparams_space)
+    grid_total = len(all_possible_combinations)
 
-    # Sanity check for num_samples: Cap at grid_total and ensure at least 1
+    # 2. Safety check: Cap num_samples at the maximum possible combinations
+    # This prevents the sampler from requesting more items than exist in the population.
     original_num = num_samples
     num_samples = max(1, min(num_samples, grid_total))
 
     if original_num != num_samples:
-        logger.info(f"Corrected random search sample size: {original_num} → {num_samples} (Total possible combinations: {grid_total})")
+        logger.info(
+            f"Corrected random search sample size: {original_num} → {num_samples} "
+            f"(Total possible combinations: {grid_total})"
+        )
 
-    random_combinations = []
-    param_names = list(normalized_hparams.keys())
+    # 3. Perform random sampling without replacement to ensure 100% uniqueness
+    # random.sample is efficient for this purpose as it picks unique elements from a population.
+    sampled_combinations = random.sample(all_possible_combinations, num_samples)
 
-    # Generate unique random combinations
-    for _ in range(num_samples):
-        single_combination = {}
-        for param_name in param_names:
-            candidates = normalized_hparams[param_name]
-            if not candidates:
-                continue
-            single_combination[param_name] = random.choice(candidates)
-        random_combinations.append(single_combination)
-
-    return random_combinations
+    return sampled_combinations
